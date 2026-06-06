@@ -35,13 +35,18 @@ exports.handler = async (event) => {
 
     const t = Date.now().toString();
     const nonce = '';
+    const method = 'GET';
     const path = '/v1.0/devices/' + deviceId + '/status';
     const contentHash = sha256('');
-    const strToSign = accessId + token + t + nonce + 'GET\n' + contentHash + '\n\n' + path;
-    const sign = hmacSHA256(secret, strToSign).toUpperCase();
+
+    // Tuya v1.0 device signature: includes access_token
+    const strToSign = [method, contentHash, '', path].join('\n');
+    const signStr = accessId + token + t + nonce + strToSign;
+    const sign = hmacSHA256(secret, signStr).toUpperCase();
 
     const url = getBaseUrl(region) + path;
     const resp = await fetch(url, {
+      method: 'GET',
       headers: {
         'client_id': accessId,
         'access_token': token,

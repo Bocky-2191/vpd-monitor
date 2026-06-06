@@ -34,18 +34,25 @@ exports.handler = async (event) => {
     if (!accessId || !secret) throw new Error('Faltan credenciales');
 
     const t = Date.now().toString();
+    const nonce = '';
+    const method = 'GET';
+    const path = '/v1.0/token?grant_type=1';
     const contentHash = sha256('');
-    const strToSign = accessId + t + contentHash;
-    const sign = hmacSHA256(secret, strToSign).toUpperCase();
 
-    const url = getBaseUrl(region) + '/v1.0/token?grant_type=1';
+    // Tuya v1.0 token signature: no access_token
+    const strToSign = [method, contentHash, '', path].join('\n');
+    const signStr = accessId + t + nonce + strToSign;
+    const sign = hmacSHA256(secret, signStr).toUpperCase();
+
+    const url = getBaseUrl(region) + path;
     const resp = await fetch(url, {
+      method: 'GET',
       headers: {
         'client_id': accessId,
         'sign': sign,
         't': t,
         'sign_method': 'HMAC-SHA256',
-        'Content-Type': 'application/json'
+        'nonce': nonce,
       }
     });
 

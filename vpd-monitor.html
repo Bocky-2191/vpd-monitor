@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>VPD Monitor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0e0a;
+    --surface: #111611;
+    --surface2: #182018;
+    --border: #1e2a1e;
+    --green: #4ade80;
+    --green-dim: #22c55e44;
+    --yellow: #facc15;
+    --yellow-dim: #eab30844;
+    --red: #f87171;
+    --red-dim: #ef444444;
+    --blue: #60a5fa;
+    --text: #e2f0e2;
+    --text-dim: #6b8f6b;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+  }
+
+  .header-title {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 2px;
+  }
+
+  .header-sub {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: all 0.3s;
+  }
+  .status-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  .status-dot.error { background: var(--red); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* TABS */
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+
+  .tab {
+    flex: 1;
+    min-width: 70px;
+    padding: 12px 8px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .tab.active {
+    color: var(--green);
+    border-bottom-color: var(--green);
+  }
+
+  /* PAGES */
+  .page { display: none; padding: 16px; }
+  .page.active { display: block; }
+
+  /* VPD CARD */
+  .vpd-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 20px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .vpd-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+  .vpd-card.ok::before { opacity: 1; }
+  .vpd-card.low::before { background: linear-gradient(90deg, transparent, var(--blue), transparent); opacity: 1; }
+  .vpd-card.high::before { background: linear-gradient(90deg, transparent, var(--red), transparent); opacity: 1; }
+
+  .vpd-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .vpd-value {
+    font-family: var(--mono);
+    font-size: 64px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+    transition: color 0.3s;
+  }
+
+  .vpd-unit {
+    font-size: 18px;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  .vpd-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-top: 8px;
+    letter-spacing: 0.5px;
+  }
+  .vpd-status.ok { background: var(--green-dim); color: var(--green); }
+  .vpd-status.low { background: #3b82f644; color: var(--blue); }
+  .vpd-status.high { background: var(--red-dim); color: var(--red); }
+  .vpd-status.unknown { background: #ffffff11; color: var(--text-dim); }
+
+  /* METRICS GRID */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .metric-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .metric-value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .metric-unit {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  /* STAGE SELECTOR */
+  .stage-selector {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .stage-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .stage-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .stage-btn {
+    flex: 1;
+    min-width: 80px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+  .stage-btn.active {
+    border-color: var(--green);
+    color: var(--green);
+    background: var(--green-dim);
+  }
+
+  /* TUYA SECTION */
+  .sync-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+  }
+
+  .sync-info {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .sync-time {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .btn {
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: none;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-primary {
+    background: var(--green);
+    color: #0a0e0a;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+
+  .btn-sm {
+    padding: 7px 14px;
+    font-size: 12px;
+  }
+
+  /* MANUAL INPUT */
+  .manual-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .form-title {
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  .input-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .input-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .input-field {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 18px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-field:focus { border-color: var(--green); }
+
+  /* CHART */
+  .chart-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .chart-title {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  canvas {
+    width: 100% !important;
+    height: 180px !important;
+  }
+
+  /* TABLE */
+  .records-table {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .table-header {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .th {
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  .table-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    transition: background 0.15s;
+  }
+  .table-row:last-child { border-bottom: none; }
+  .table-row:hover { background: var(--surface2); }
+
+  .td {
+    font-size: 12px;
+    color: var(--text);
+    font-family: var(--mono);
+  }
+
+  .td-time {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: var(--sans);
+  }
+
+  .vpd-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: var(--mono);
+    font-weight: 700;
+  }
+
+  /* VPD REFERENCE TABLE */
+  .ref-table {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .ref-row {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+  }
+  .ref-row:last-child { border-bottom: none; }
+  .ref-row.header { background: var(--surface2); }
+
+  .ref-cell {
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .ref-badge {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+  }
+
+  /* SETTINGS */
+  .settings-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .settings-title {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .settings-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-row:last-child { border-bottom: none; }
+
+  .settings-row-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+  }
+
+  .settings-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .settings-input:focus { border-color: var(--green); }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 999;
+    transition: transform 0.3s ease;
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { border-color: var(--red); color: var(--red); }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  .empty-icon { font-size: 32px; margin-bottom: 10px; }
+
+  .actions-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .alert-banner {
+    background: var(--red-dim);
+    border: 1px solid var(--red);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--red);
+    display: none;
+  }
+  .alert-banner.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">VPD MONITOR</div>
+    <div class="header-sub">Monitor de Déficit de Presión de Vapor</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="sync-time" id="lastSync">--:--</span>
+    <div class="status-dot" id="statusDot"></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showPage('dashboard')">Dashboard</div>
+  <div class="tab" onclick="showPage('historial')">Historial</div>
+  <div class="tab" onclick="showPage('referencia')">Referencia</div>
+  <div class="tab" onclick="showPage('ajustes')">Ajustes</div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="page active" id="page-dashboard">
+
+  <div class="alert-banner" id="alertBanner"></div>
+
+  <div class="stage-selector">
+    <div class="stage-label">Etapa del cultivo</div>
+    <div class="stage-buttons">
+      <button class="stage-btn" onclick="setStage('seedling')" id="btn-seedling">Plántula</button>
+      <button class="stage-btn active" onclick="setStage('veg')" id="btn-veg">Vegetativo</button>
+      <button class="stage-btn" onclick="setStage('early-flower')" id="btn-early-flower">Flora Temp.</button>
+      <button class="stage-btn" onclick="setStage('late-flower')" id="btn-late-flower">Flora Tard.</button>
+    </div>
+  </div>
+
+  <div class="vpd-card" id="vpdCard">
+    <div class="vpd-label">VPD ACTUAL</div>
+    <div class="vpd-value" id="vpdValue">—<span class="vpd-unit"> kPa</span></div>
+    <div class="vpd-status unknown" id="vpdStatus">Sin datos</div>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Temperatura</div>
+      <div class="metric-value" id="tempValue">—<span class="metric-unit">°C</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Humedad</div>
+      <div class="metric-value" id="humValue">—<span class="metric-unit">%</span></div>
+    </div>
+  </div>
+
+  <div class="sync-bar">
+    <div>
+      <div class="sync-info" id="syncSource">Fuente: Manual</div>
+    </div>
+    <button class="btn btn-primary btn-sm" id="syncBtn" onclick="syncTuya()">
+      Sincronizar
+    </button>
+  </div>
+
+  <div class="manual-form">
+    <div class="form-title">Entrada Manual</div>
+    <div class="input-row">
+      <div class="input-group">
+        <div class="input-label">Temperatura (°C)</div>
+        <input type="number" class="input-field" id="inputTemp" placeholder="25" step="0.1" min="0" max="50">
+      </div>
+      <div class="input-group">
+        <div class="input-label">Humedad (%)</div>
+        <input type="number" class="input-field" id="inputHum" placeholder="60" step="1" min="0" max="100">
+      </div>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="calcularManual()">Calcular VPD</button>
+  </div>
+
+  <div class="chart-container">
+    <div class="chart-title">VPD últimas 24 h</div>
+    <canvas id="vpdChart"></canvas>
+  </div>
+
+</div>
+
+<!-- HISTORIAL -->
+<div class="page" id="page-historial">
+  <div class="actions-row">
+    <button class="btn btn-ghost btn-sm" style="flex:1" onclick="exportCSV()">Exportar CSV</button>
+    <button class="btn btn-ghost btn-sm" onclick="clearRecords()" style="color:var(--red);border-color:var(--red)">Limpiar</button>
+  </div>
+
+  <div class="records-table" id="recordsTable">
+    <div class="table-header">
+      <div class="th">Fecha/Hora</div>
+      <div class="th">Temp</div>
+      <div class="th">HR</div>
+      <div class="th">VPD</div>
+    </div>
+    <div id="recordsBody">
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        No hay registros todavía
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REFERENCIA -->
+<div class="page" id="page-referencia">
+  <div class="ref-table">
+    <div class="ref-row header">
+      <div class="th">Etapa</div>
+      <div class="th">VPD ideal</div>
+      <div class="th">Estado</div>
+    </div>
+    <div class="ref-row">
+      <div class="ref-cell">🌱 Plántula</div>
+      <div class="ref-cell" style="font-family:var(--mono)">0.4 – 0.8</div>
+      <div class="ref-cell" style="font-size:11px;color:var(--text-dim)">kPa</div>
+    </div>
+    <div class="ref-row">
+      <div class="ref-cell">🌿 Vegetativo</div>
+      <div class="ref-cell" style="font-family:var(--mono)">0.8 – 1.2</div>
+      <div class="ref-cell" style="font-size:11px;color:var(--text-dim)">kPa</div>
+    </div>
+    <div class="ref-row">
+      <div class="ref-cell">🌸 Flora Temprana</div>
+      <div class="ref-cell" style="font-family:var(--mono)">1.0 – 1.5</div>
+      <div class="ref-cell" style="font-size:11px;color:var(--text-dim)">kPa</div>
+    </div>
+    <div class="ref-row">
+      <div class="ref-cell">🌺 Flora Tardía</div>
+      <div class="ref-cell" style="font-family:var(--mono)">1.2 – 1.6</div>
+      <div class="ref-cell" style="font-size:11px;color:var(--text-dim)">kPa</div>
+    </div>
+  </div>
+
+  <div class="ref-table">
+    <div class="ref-row header">
+      <div class="th" style="grid-column:1/-1">Fórmula de cálculo</div>
+    </div>
+    <div style="padding:16px;font-size:13px;color:var(--text-dim);line-height:1.7">
+      <p style="margin-bottom:8px"><strong style="color:var(--text)">SVP</strong> (Presión de vapor saturado):</p>
+      <p style="font-family:var(--mono);font-size:12px;color:var(--green);margin-bottom:12px">SVP = 0.6108 × e^(17.27 × T / (T + 237.3))</p>
+      <p style="margin-bottom:8px"><strong style="color:var(--text)">VPD</strong> (Déficit de presión de vapor):</p>
+      <p style="font-family:var(--mono);font-size:12px;color:var(--green)">VPD = SVP × (1 − HR/100)</p>
+      <p style="margin-top:12px;font-size:11px">Donde T = temperatura ambiente (°C) y HR = humedad relativa (%)</p>
+    </div>
+  </div>
+
+  <div class="ref-table">
+    <div class="ref-row header">
+      <div class="th" style="grid-column:1/-1">Indicadores de color</div>
+    </div>
+    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px">
+        <div style="width:12px;height:12px;border-radius:50%;background:var(--blue);flex-shrink:0"></div>
+        <span style="color:var(--text-dim)">VPD bajo — Riesgo de hongos, menor transpiración</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px">
+        <div style="width:12px;height:12px;border-radius:50%;background:var(--green);flex-shrink:0"></div>
+        <span style="color:var(--text-dim)">VPD óptimo — Rango ideal para la etapa</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px">
+        <div style="width:12px;height:12px;border-radius:50%;background:var(--yellow);flex-shrink:0"></div>
+        <span style="color:var(--text-dim)">VPD alto — Estrés hídrico, revisar riego</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px">
+        <div style="width:12px;height:12px;border-radius:50%;background:var(--red);flex-shrink:0"></div>
+        <span style="color:var(--text-dim)">VPD crítico — Estrés severo, acción inmediata</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AJUSTES -->
+<div class="page" id="page-ajustes">
+  <div class="settings-section">
+    <div class="settings-title">Configuración Tuya</div>
+    <div class="settings-row">
+      <div class="settings-row-label">Access ID (Client ID)</div>
+      <input type="text" class="settings-input" id="cfgAccessId" placeholder="tyjh4tx9gh...">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-label">Access Secret</div>
+      <input type="password" class="settings-input" id="cfgSecret" placeholder="••••••••••••••••">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-label">Device ID</div>
+      <input type="text" class="settings-input" id="cfgDeviceId" placeholder="eb047122ff...">
+    </div>
+    <div class="settings-row">
+      <div class="settings-row-label">Data Center</div>
+      <select class="settings-input" id="cfgRegion">
+        <option value="us">Western America (us)</option>
+        <option value="eu">Central Europe (eu)</option>
+        <option value="in">India (in)</option>
+        <option value="cn">China (cn)</option>
+      </select>
+    </div>
+    <div style="padding:14px 16px">
+      <button class="btn btn-primary" style="width:100%" onclick="saveSettings()">Guardar configuración</button>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <div class="settings-title">Sincronización automática</div>
+    <div class="settings-row">
+      <div class="settings-row-label">Intervalo (minutos)</div>
+      <select class="settings-input" id="cfgInterval">
+        <option value="0">Desactivado</option>
+        <option value="5">Cada 5 min</option>
+        <option value="10" selected>Cada 10 min</option>
+        <option value="15">Cada 15 min</option>
+        <option value="30">Cada 30 min</option>
+      </select>
+    </div>
+    <div style="padding:14px 16px">
+      <button class="btn btn-primary" style="width:100%" onclick="saveSettings()">Aplicar</button>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <div class="settings-title">Alertas</div>
+    <div class="settings-row">
+      <div class="settings-row-label">Activar alertas de VPD fuera de rango</div>
+      <select class="settings-input" id="cfgAlerts">
+        <option value="1">Activadas</option>
+        <option value="0">Desactivadas</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// =================== CONFIG ===================
+const CONFIG = {
+  accessId: 'tyjh4tx9gh4phux5ncyh',
+  secret: 'bdaa6f64dd004852a7ce220e33c6e852',
+  deviceId: 'eb047122ff56fc957bdcfa',
+  region: 'us',
+  interval: 10,
+  alerts: true
+};
+
+const STAGES = {
+  seedling:     { label: 'Plántula',       min: 0.4, max: 0.8 },
+  veg:          { label: 'Vegetativo',     min: 0.8, max: 1.2 },
+  'early-flower': { label: 'Flora Temprana', min: 1.0, max: 1.5 },
+  'late-flower':  { label: 'Flora Tardía',   min: 1.2, max: 1.6 }
+};
+
+let currentStage = 'veg';
+let records = [];
+let chart = null;
+let syncInterval = null;
+let token = null;
+let tokenExpiry = 0;
+
+// =================== INIT ===================
+function init() {
+  loadFromStorage();
+  loadSettings();
+  renderChart();
+  renderRecords();
+  setupAutoSync();
+  loadSettingsUI();
+}
+
+function loadFromStorage() {
+  const saved = localStorage.getItem('vpd_records');
+  if (saved) records = JSON.parse(saved);
+  const stage = localStorage.getItem('vpd_stage');
+  if (stage) currentStage = stage;
+  document.getElementById('btn-' + currentStage).classList.add('active');
+  document.querySelectorAll('.stage-btn').forEach(b => {
+    if (!b.id.endsWith(currentStage)) b.classList.remove('active');
+  });
+}
+
+function loadSettings() {
+  const saved = localStorage.getItem('vpd_config');
+  if (saved) Object.assign(CONFIG, JSON.parse(saved));
+}
+
+function loadSettingsUI() {
+  document.getElementById('cfgAccessId').value = CONFIG.accessId || '';
+  document.getElementById('cfgSecret').value = CONFIG.secret || '';
+  document.getElementById('cfgDeviceId').value = CONFIG.deviceId || '';
+  document.getElementById('cfgRegion').value = CONFIG.region || 'us';
+  document.getElementById('cfgInterval').value = CONFIG.interval || 10;
+  document.getElementById('cfgAlerts').value = CONFIG.alerts ? '1' : '0';
+}
+
+// =================== VPD CALC ===================
+function calcVPD(temp, hum) {
+  const svp = 0.6108 * Math.exp((17.27 * temp) / (temp + 237.3));
+  return svp * (1 - hum / 100);
+}
+
+function getVPDStatus(vpd) {
+  const stage = STAGES[currentStage];
+  if (vpd < stage.min - 0.2) return { status: 'low', label: 'VPD muy bajo', css: 'low' };
+  if (vpd < stage.min) return { status: 'low', label: 'VPD bajo', css: 'low' };
+  if (vpd <= stage.max) return { status: 'ok', label: '✓ Rango óptimo', css: 'ok' };
+  if (vpd <= stage.max + 0.3) return { status: 'high', label: 'VPD alto', css: 'high' };
+  return { status: 'critical', label: '⚠ VPD crítico', css: 'high' };
+}
+
+function updateDashboard(temp, hum, source) {
+  const vpd = calcVPD(temp, hum);
+  const { label, css } = getVPDStatus(vpd);
+
+  document.getElementById('vpdValue').innerHTML = vpd.toFixed(2) + '<span class="vpd-unit"> kPa</span>';
+  document.getElementById('tempValue').innerHTML = temp.toFixed(1) + '<span class="metric-unit">°C</span>';
+  document.getElementById('humValue').innerHTML = Math.round(hum) + '<span class="metric-unit">%</span>';
+
+  const statusEl = document.getElementById('vpdStatus');
+  statusEl.textContent = label;
+  statusEl.className = 'vpd-status ' + css;
+
+  const card = document.getElementById('vpdCard');
+  card.className = 'vpd-card ' + css;
+
+  const colors = { ok: 'var(--green)', low: 'var(--blue)', high: 'var(--red)', critical: 'var(--red)' };
+  document.getElementById('vpdValue').style.color = colors[css] || 'var(--text)';
+
+  document.getElementById('syncSource').textContent = 'Fuente: ' + source;
+
+  // Alert
+  if (CONFIG.alerts && css !== 'ok') {
+    const banner = document.getElementById('alertBanner');
+    banner.textContent = '⚠ ' + label + ' para etapa ' + STAGES[currentStage].label + ' — Rango: ' + STAGES[currentStage].min + '–' + STAGES[currentStage].max + ' kPa';
+    banner.classList.add('show');
+  } else {
+    document.getElementById('alertBanner').classList.remove('show');
+  }
+
+  addRecord(temp, hum, vpd, source);
+}
+
+function calcularManual() {
+  const temp = parseFloat(document.getElementById('inputTemp').value);
+  const hum = parseFloat(document.getElementById('inputHum').value);
+  if (isNaN(temp) || isNaN(hum)) { showToast('Ingresá temperatura y humedad', 'error'); return; }
+  if (temp < 0 || temp > 50) { showToast('Temperatura fuera de rango (0–50°C)', 'error'); return; }
+  if (hum < 0 || hum > 100) { showToast('Humedad fuera de rango (0–100%)', 'error'); return; }
+  updateDashboard(temp, hum, 'Manual');
+  showToast('VPD calculado', 'success');
+}
+
+// =================== TUYA API ===================
+function getBaseUrl() {
+  const regions = { us: 'openapi.tuyaus.com', eu: 'openapi.tuyaeu.com', in: 'openapi.tuyain.com', cn: 'openapi.tuyacn.com' };
+  return 'https://' + (regions[CONFIG.region] || regions.us);
+}
+
+async function sha256Hex(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function hmacSHA256(key, message) {
+  const keyBytes = new TextEncoder().encode(key);
+  const msgBytes = new TextEncoder().encode(message);
+  const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', cryptoKey, msgBytes);
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function getToken() {
+  if (token && Date.now() < tokenExpiry) return token;
+  const t = Date.now().toString();
+  const strToSign = CONFIG.accessId + t + await sha256Hex('');
+  const sign = (await hmacSHA256(CONFIG.secret, strToSign)).toUpperCase();
+  const url = getBaseUrl() + '/v1.0/token?grant_type=1';
+  const resp = await fetch(url, {
+    headers: {
+      'client_id': CONFIG.accessId,
+      'sign': sign,
+      't': t,
+      'sign_method': 'HMAC-SHA256',
+      'Content-Type': 'application/json'
+    }
+  });
+  const data = await resp.json();
+  if (!data.success) throw new Error(data.msg || 'Error obteniendo token');
+  token = data.result.access_token;
+  tokenExpiry = Date.now() + (data.result.expire_time * 1000) - 60000;
+  return token;
+}
+
+async function syncTuya() {
+  if (!CONFIG.accessId || !CONFIG.secret || !CONFIG.deviceId) {
+    showToast('Configurá las credenciales Tuya en Ajustes', 'error');
+    return;
+  }
+  const btn = document.getElementById('syncBtn');
+  btn.innerHTML = '<span class="spinner"></span>Sincronizando';
+  btn.disabled = true;
+  document.getElementById('statusDot').className = 'status-dot';
+
+  try {
+    const tk = await getToken();
+    const t = Date.now().toString();
+    const path = '/v1.0/devices/' + CONFIG.deviceId + '/status';
+    const strToSign = CONFIG.accessId + tk + t + await sha256Hex('');
+    const sign = (await hmacSHA256(CONFIG.secret, CONFIG.accessId + tk + t + 'GET\n' + await sha256Hex('') + '\n\n' + path)).toUpperCase();
+
+    // Build proper Tuya v1.0 signature
+    const nonce = '';
+    const contentHash = await sha256Hex('');
+    const signStr = CONFIG.accessId + tk + t + nonce + 'GET\n' + contentHash + '\n\n' + path;
+    const finalSign = (await hmacSHA256(CONFIG.secret, signStr)).toUpperCase();
+
+    const resp = await fetch(getBaseUrl() + path, {
+      headers: {
+        'client_id': CONFIG.accessId,
+        'access_token': tk,
+        'sign': finalSign,
+        't': t,
+        'sign_method': 'HMAC-SHA256',
+        'nonce': nonce,
+      }
+    });
+    const data = await resp.json();
+
+    if (!data.success) throw new Error(data.msg || 'Error leyendo dispositivo');
+
+    const statusMap = {};
+    data.result.forEach(item => { statusMap[item.code] = item.value; });
+
+    // Códigos comunes Tuya para temp/hum (varía por modelo)
+    const temp = (statusMap['temp_current'] ?? statusMap['va_temperature'] ?? statusMap['temp']) / 10;
+    const hum = statusMap['humidity_value'] ?? statusMap['va_humidity'] ?? statusMap['humidity'];
+
+    if (isNaN(temp) || isNaN(hum)) throw new Error('El dispositivo no retornó temp/humedad. Verificá el Device ID.');
+
+    updateDashboard(temp, hum, 'Tuya / Smart Life');
+    document.getElementById('statusDot').className = 'status-dot online';
+    document.getElementById('lastSync').textContent = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    showToast('Sincronizado con Smart Life ✓', 'success');
+
+  } catch (err) {
+    document.getElementById('statusDot').className = 'status-dot error';
+    showToast('Error: ' + err.message, 'error');
+    console.error(err);
+  } finally {
+    btn.innerHTML = 'Sincronizar';
+    btn.disabled = false;
+  }
+}
+
+// =================== AUTO SYNC ===================
+function setupAutoSync() {
+  if (syncInterval) clearInterval(syncInterval);
+  if (CONFIG.interval > 0) {
+    syncInterval = setInterval(syncTuya, CONFIG.interval * 60 * 1000);
+  }
+}
+
+// =================== RECORDS ===================
+function addRecord(temp, hum, vpd, source) {
+  const record = {
+    time: new Date().toISOString(),
+    temp: parseFloat(temp.toFixed(1)),
+    hum: Math.round(hum),
+    vpd: parseFloat(vpd.toFixed(3)),
+    stage: currentStage,
+    source
+  };
+  records.unshift(record);
+  if (records.length > 500) records = records.slice(0, 500);
+  localStorage.setItem('vpd_records', JSON.stringify(records));
+  renderRecords();
+  updateChart();
+}
+
+function renderRecords() {
+  const body = document.getElementById('recordsBody');
+  if (records.length === 0) {
+    body.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div>No hay registros todavía</div>';
+    return;
+  }
+  body.innerHTML = records.slice(0, 100).map(r => {
+    const { css } = getVPDStatusForValue(r.vpd, r.stage);
+    const colors = { ok: 'var(--green)', low: 'var(--blue)', high: 'var(--red)' };
+    const color = colors[css] || 'var(--text-dim)';
+    const d = new Date(r.time);
+    const dateStr = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="table-row">
+      <div class="td td-time">${dateStr}</div>
+      <div class="td">${r.temp}°</div>
+      <div class="td">${r.hum}%</div>
+      <div class="td"><span class="vpd-badge" style="color:${color};background:${color}22">${r.vpd}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function getVPDStatusForValue(vpd, stage) {
+  const s = STAGES[stage] || STAGES.veg;
+  if (vpd < s.min) return { css: 'low' };
+  if (vpd <= s.max) return { css: 'ok' };
+  return { css: 'high' };
+}
+
+function clearRecords() {
+  if (!confirm('¿Eliminar todos los registros?')) return;
+  records = [];
+  localStorage.removeItem('vpd_records');
+  renderRecords();
+  updateChart();
+  showToast('Registros eliminados', 'success');
+}
+
+function exportCSV() {
+  if (records.length === 0) { showToast('No hay registros para exportar', 'error'); return; }
+  const header = 'Fecha/Hora,Temperatura (°C),Humedad (%),VPD (kPa),Etapa,Fuente\n';
+  const rows = records.map(r => `${r.time},${r.temp},${r.hum},${r.vpd},${STAGES[r.stage]?.label || r.stage},${r.source}`).join('\n');
+  const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'vpd_registros_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV exportado ✓', 'success');
+}
+
+// =================== CHART ===================
+function renderChart() {
+  const canvas = document.getElementById('vpdChart');
+  const ctx = canvas.getContext('2d');
+
+  const gradient = ctx.createLinearGradient(0, 0, 0, 180);
+  gradient.addColorStop(0, '#4ade8033');
+  gradient.addColorStop(1, '#4ade8000');
+
+  chart = {
+    canvas, ctx, gradient,
+    data: [], labels: []
+  };
+  drawChart();
+}
+
+function updateChart() {
+  const last24 = records.filter(r => {
+    const age = Date.now() - new Date(r.time).getTime();
+    return age < 86400000;
+  }).slice(0, 48).reverse();
+
+  chart.data = last24.map(r => r.vpd);
+  chart.labels = last24.map(r => {
+    const d = new Date(r.time);
+    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+  });
+  drawChart();
+}
+
+function drawChart() {
+  const { canvas, ctx, gradient, data, labels } = chart;
+  const W = canvas.offsetWidth || 300;
+  const H = 180;
+  canvas.width = W * window.devicePixelRatio;
+  canvas.height = H * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+  ctx.clearRect(0, 0, W, H);
+
+  if (data.length < 2) {
+    ctx.fillStyle = '#6b8f6b';
+    ctx.font = '13px DM Sans';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sin datos suficientes', W / 2, H / 2);
+    return;
+  }
+
+  const pad = { top: 12, bottom: 28, left: 36, right: 12 };
+  const cW = W - pad.left - pad.right;
+  const cH = H - pad.top - pad.bottom;
+
+  const minV = Math.max(0, Math.min(...data) - 0.2);
+  const maxV = Math.max(...data) + 0.2;
+  const range = maxV - minV || 1;
+
+  const stage = STAGES[currentStage];
+
+  // Optimal zone
+  const yMin = pad.top + cH * (1 - (stage.min - minV) / range);
+  const yMax = pad.top + cH * (1 - (stage.max - minV) / range);
+  ctx.fillStyle = '#4ade8018';
+  ctx.fillRect(pad.left, yMax, cW, yMin - yMax);
+
+  // Grid lines
+  ctx.strokeStyle = '#1e2a1e';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (cH / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(pad.left + cW, y);
+    ctx.stroke();
+    const val = maxV - (range / 4) * i;
+    ctx.fillStyle = '#6b8f6b';
+    ctx.font = '10px Space Mono';
+    ctx.textAlign = 'right';
+    ctx.fillText(val.toFixed(1), pad.left - 4, y + 4);
+  }
+
+  // Line
+  const xStep = cW / (data.length - 1);
+  const xOf = (i) => pad.left + i * xStep;
+  const yOf = (v) => pad.top + cH * (1 - (v - minV) / range);
+
+  ctx.beginPath();
+  ctx.moveTo(xOf(0), yOf(data[0]));
+  for (let i = 1; i < data.length; i++) {
+    const cpx = xOf(i - 0.5);
+    ctx.bezierCurveTo(cpx, yOf(data[i - 1]), cpx, yOf(data[i]), xOf(i), yOf(data[i]));
+  }
+  ctx.strokeStyle = '#4ade80';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Fill under
+  ctx.lineTo(xOf(data.length - 1), H - pad.bottom);
+  ctx.lineTo(xOf(0), H - pad.bottom);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Dots on first and last
+  [0, data.length - 1].forEach(i => {
+    ctx.beginPath();
+    ctx.arc(xOf(i), yOf(data[i]), 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#4ade80';
+    ctx.fill();
+  });
+
+  // X labels (show max 6)
+  const step = Math.max(1, Math.floor(data.length / 5));
+  ctx.fillStyle = '#6b8f6b';
+  ctx.font = '9px Space Mono';
+  ctx.textAlign = 'center';
+  for (let i = 0; i < data.length; i += step) {
+    ctx.fillText(labels[i], xOf(i), H - pad.bottom + 14);
+  }
+}
+
+// =================== STAGE ===================
+function setStage(stage) {
+  currentStage = stage;
+  localStorage.setItem('vpd_stage', stage);
+  document.querySelectorAll('.stage-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + stage).classList.add('active');
+  updateChart();
+}
+
+// =================== SETTINGS ===================
+function saveSettings() {
+  CONFIG.accessId = document.getElementById('cfgAccessId').value.trim();
+  CONFIG.secret = document.getElementById('cfgSecret').value.trim();
+  CONFIG.deviceId = document.getElementById('cfgDeviceId').value.trim();
+  CONFIG.region = document.getElementById('cfgRegion').value;
+  CONFIG.interval = parseInt(document.getElementById('cfgInterval').value);
+  CONFIG.alerts = document.getElementById('cfgAlerts').value === '1';
+  token = null; // reset token on config change
+  localStorage.setItem('vpd_config', JSON.stringify(CONFIG));
+  setupAutoSync();
+  showToast('Configuración guardada ✓', 'success');
+}
+
+// =================== UI HELPERS ===================
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.target.classList.add('active');
+  if (id === 'historial') renderRecords();
+  if (id === 'dashboard') updateChart();
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || '');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// =================== START ===================
+init();
+// Auto sync on load if credentials exist
+setTimeout(() => {
+  if (CONFIG.accessId && CONFIG.secret && CONFIG.deviceId) syncTuya();
+}, 800);
+</script>
+</body>
+</html>
